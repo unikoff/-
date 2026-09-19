@@ -41,21 +41,26 @@ python -m pip install -r requirements-dev.txt
 HTTPS:
 
 ```powershell
-python main.py https://example.com/path/to/large-file.bin
+python main.py "https://speed.cloudflare.com/__down?bytes=10000000"
 ```
 
 Параметры таймаутов являются необязательными:
 
 ```powershell
-python main.py https://example.com/large-file.bin --connect-timeout 15 --timeout 180
+python main.py "https://speed.cloudflare.com/__down?bytes=10000000" --connect-timeout 15 --timeout 180
 ```
+
+В примере используется публичный endpoint Cloudflare: параметр `bytes=10000000`
+запрашивает бинарный ответ размером 10 MB. Десять последовательных запросов
+передадут примерно 100 MB. Для короткой проверки можно заменить значение на
+`1000000`.
 
 Пример формата вывода:
 
 ```text
 Internet Speed Benchmark
 ===========================
-Target:  https://example.com/large-file.bin
+Target:  https://speed.cloudflare.com/__down?bytes=10000000
 Requests: 10 (sequential)
 
   01/10 |    2.350 s |     50.00 MB |    21.28 MB/s | HTTP 200

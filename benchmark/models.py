@@ -10,7 +10,6 @@ class RequestResult:
     duration_seconds: float
     downloaded_bytes: int
     status_code: int
-    effective_url: str | None = None
 
     @property
     def speed_mb_s(self) -> float:

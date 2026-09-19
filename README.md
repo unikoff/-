@@ -11,9 +11,12 @@
   завершения предыдущего;
 - один переиспользуемый curl handle, поэтому libcurl может повторно использовать
   соединение;
-- потоковый подсчёт фактически полученных байтов через `WRITEFUNCTION`;
+- потоковая отбрасывающая обработка тела ответа без записи на диск и хранения в
+  памяти; объём берётся из нативной метрики libcurl `SIZE_DOWNLOAD_T`;
 - таймаут подключения и общий таймаут одной загрузки;
 - проверка HTTP-статуса `2xx` и непустого тела ответа;
+- перенаправления не выполняются: каждая итерация соответствует ровно одному
+  HTTP GET, поэтому всего их строго 10;
 - итоговая скорость считается как общий объём / суммарное время, а не как
   простое среднее скоростей отдельных запросов;
 - автоматические тесты с локальным HTTP-сервером, без внешней сети.
@@ -38,7 +41,7 @@ python -m pip install -r requirements-dev.txt
 ## Запуск
 
 Используйте прямую ссылку на достаточно большой файл, доступный по HTTP или
-HTTPS:
+HTTPS. Указывайте конечный URL файла, а не ссылку с перенаправлением.
 
 ```powershell
 python main.py "https://speed.cloudflare.com/__down?bytes=10000000"
@@ -63,16 +66,16 @@ Internet Speed Benchmark
 Target:  https://speed.cloudflare.com/__down?bytes=10000000
 Requests: 10 (sequential)
 
-  01/10 |    2.350 s |     50.00 MB |    21.28 MB/s | HTTP 200
+  01/10 |    2.350 s |     10.00 MB |     4.26 MB/s | HTTP 200
   ...
 
 Results
   Successful requests: 10/10
-  Total downloaded:    500.00 MB
+  Total downloaded:    100.00 MB
   Average time:        2.500 s
   Total transfer time: 25.000 s
-  Average speed:       20.00 MB/s
-  Average speed:       160.00 Mbps
+  Average speed:       4.00 MB/s
+  Average speed:       32.00 Mbps
 ```
 
 Размеры в `MB` — десятичные (`1 MB = 1,000,000 bytes`).

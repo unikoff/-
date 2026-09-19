@@ -13,18 +13,11 @@ from .statistics import calculate_summary
 DEFAULT_REQUEST_COUNT = 10
 DEFAULT_CONNECT_TIMEOUT_SECONDS = 10.0
 DEFAULT_TIMEOUT_SECONDS = 120.0
+RECEIVE_BUFFER_SIZE_BYTES = 256 * 1024
 
 
 class BenchmarkError(RuntimeError):
     """Raised when a request cannot produce a valid benchmark measurement."""
-
-
-def _as_text(value: object) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return str(value)
 
 
 class CurlDownloadClient:
@@ -48,12 +41,15 @@ class CurlDownloadClient:
             raise ValueError("timeouts must be greater than zero")
 
         self.url = url
-        self._bytes_received = 0
         curl = pycurl.Curl()
         self._curl: pycurl.Curl | None = curl
         curl.setopt(pycurl.URL, url)
-        curl.setopt(pycurl.FOLLOWLOCATION, 1)
-        curl.setopt(pycurl.MAXREDIRS, 5)
+        # A redirect is another HTTP request. Keeping it disabled ensures that
+        # ten benchmark iterations always mean exactly ten GET requests.
+        curl.setopt(pycurl.FOLLOWLOCATION, 0)
+        # Larger chunks reduce Python callback crossings while retaining a
+        # fixed, small memory footprint and streaming behavior.
+        curl.setopt(pycurl.BUFFERSIZE, RECEIVE_BUFFER_SIZE_BYTES)
         curl.setopt(pycurl.CONNECTTIMEOUT_MS, max(1, round(connect_timeout_seconds * 1000)))
         curl.setopt(pycurl.TIMEOUT_MS, max(1, round(timeout_seconds * 1000)))
         curl.setopt(pycurl.NOSIGNAL, 1)
@@ -67,7 +63,7 @@ class CurlDownloadClient:
                 "User-Agent: internet-speed-benchmark/1.0",
             ],
         )
-        curl.setopt(pycurl.WRITEFUNCTION, self._write_chunk)
+        curl.setopt(pycurl.WRITEFUNCTION, self._discard_chunk)
 
     def __enter__(self) -> "CurlDownloadClient":
         return self
@@ -82,10 +78,10 @@ class CurlDownloadClient:
             self._curl.close()
             self._curl = None
 
-    def _write_chunk(self, chunk: bytes) -> int:
-        """Count received bytes and immediately discard the body chunk."""
+    @staticmethod
+    def _discard_chunk(chunk: bytes) -> int:
+        """Discard one response chunk after libcurl has received it."""
 
-        self._bytes_received += len(chunk)
         return len(chunk)
 
     def download(self) -> RequestResult:
@@ -94,7 +90,6 @@ class CurlDownloadClient:
         if self._curl is None:
             raise RuntimeError("client is already closed")
 
-        self._bytes_received = 0
         started_at = perf_counter()
 
         try:
@@ -102,10 +97,9 @@ class CurlDownloadClient:
         except pycurl.error as error:
             status_code = int(self._curl.getinfo(pycurl.RESPONSE_CODE) or 0)
             if status_code:
-                raise BenchmarkError(
-                    f"HTTP request failed with status {status_code}: {error}",
-                ) from error
-            raise BenchmarkError(f"HTTP request failed: {error}") from error
+                raise BenchmarkError(f"HTTP request failed with status {status_code}") from error
+            error_message = error.args[1] if len(error.args) > 1 else str(error)
+            raise BenchmarkError(f"HTTP request failed: {error_message}") from error
 
         # TOTAL_TIME is measured by libcurl around the transfer. The monotonic
         # clock fallback keeps the result usable with unusual libcurl builds.
@@ -116,14 +110,14 @@ class CurlDownloadClient:
         status_code = int(self._curl.getinfo(pycurl.RESPONSE_CODE) or 0)
         if not 200 <= status_code < 300:
             raise BenchmarkError(f"unexpected HTTP status {status_code}")
-        if self._bytes_received <= 0:
+        downloaded_bytes = int(self._curl.getinfo(pycurl.SIZE_DOWNLOAD_T) or 0)
+        if downloaded_bytes <= 0:
             raise BenchmarkError("HTTP response body is empty")
 
         return RequestResult(
             duration_seconds=duration,
-            downloaded_bytes=self._bytes_received,
+            downloaded_bytes=downloaded_bytes,
             status_code=status_code,
-            effective_url=_as_text(self._curl.getinfo(pycurl.EFFECTIVE_URL)),
         )
 
 

@@ -32,6 +32,10 @@ class BenchmarkHandler(BaseHTTPRequestHandler):
             if self.path == "/error":
                 body = b"server error"
                 self.send_response(503)
+            elif self.path == "/redirect":
+                body = b"redirect"
+                self.send_response(302)
+                self.send_header("Location", "/file")
             elif self.path == "/empty":
                 body = b""
                 self.send_response(200)
@@ -101,6 +105,17 @@ def test_http_error_stops_the_run_without_retry(
 
     with pytest.raises(BenchmarkError, match="503"):
         run_benchmark(base_url + "/error", timeout_seconds=5)
+
+    assert BenchmarkHandler.requests == 1
+
+
+def test_redirect_is_rejected_to_preserve_exact_request_count(
+    http_server: tuple[ThreadingHTTPServer, str],
+) -> None:
+    _, base_url = http_server
+
+    with pytest.raises(BenchmarkError, match="302"):
+        run_benchmark(base_url + "/redirect", timeout_seconds=5)
 
     assert BenchmarkHandler.requests == 1
 

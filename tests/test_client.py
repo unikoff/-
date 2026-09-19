@@ -39,6 +39,9 @@ class BenchmarkHandler(BaseHTTPRequestHandler):
             elif self.path == "/empty":
                 body = b""
                 self.send_response(200)
+            elif self.path == "/partial":
+                body = type(self).body[:128]
+                self.send_response(206)
             else:
                 body = type(self).body
                 self.send_response(200)
@@ -127,3 +130,14 @@ def test_empty_response_is_not_accepted(
 
     with pytest.raises(BenchmarkError, match="empty"):
         run_benchmark(base_url + "/empty", timeout_seconds=5)
+
+
+def test_partial_content_is_not_accepted_as_a_complete_file(
+    http_server: tuple[ThreadingHTTPServer, str],
+) -> None:
+    _, base_url = http_server
+
+    with pytest.raises(BenchmarkError, match="206"):
+        run_benchmark(base_url + "/partial", timeout_seconds=5)
+
+    assert BenchmarkHandler.requests == 1

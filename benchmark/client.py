@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from time import perf_counter
+from types import TracebackType
 
 import pycurl
 
@@ -40,10 +41,10 @@ class CurlDownloadClient:
         if connect_timeout_seconds <= 0 or timeout_seconds <= 0:
             raise ValueError("timeouts must be greater than zero")
 
-        self.url = url
         curl = pycurl.Curl()
         self._curl: pycurl.Curl | None = curl
         curl.setopt(pycurl.URL, url)
+        curl.setopt(pycurl.HTTPGET, 1)
         # A redirect is another HTTP request. Keeping it disabled ensures that
         # ten benchmark iterations always mean exactly ten GET requests.
         curl.setopt(pycurl.FOLLOWLOCATION, 0)
@@ -68,7 +69,12 @@ class CurlDownloadClient:
     def __enter__(self) -> "CurlDownloadClient":
         return self
 
-    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self.close()
 
     def close(self) -> None:
@@ -108,7 +114,7 @@ class CurlDownloadClient:
             duration = perf_counter() - started_at
 
         status_code = int(self._curl.getinfo(pycurl.RESPONSE_CODE) or 0)
-        if not 200 <= status_code < 300:
+        if status_code != 200:
             raise BenchmarkError(f"unexpected HTTP status {status_code}")
         downloaded_bytes = int(self._curl.getinfo(pycurl.SIZE_DOWNLOAD_T) or 0)
         if downloaded_bytes <= 0:

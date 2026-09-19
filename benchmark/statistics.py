@@ -1,6 +1,7 @@
 """Pure calculations for benchmark results."""
 
 from collections.abc import Sequence
+from math import fsum
 
 from .models import BenchmarkSummary, RequestResult
 
@@ -16,7 +17,7 @@ def calculate_summary(results: Sequence[RequestResult]) -> BenchmarkSummary:
     if not results:
         raise ValueError("at least one request result is required")
 
-    total_time = sum(result.duration_seconds for result in results)
+    total_time = fsum(result.duration_seconds for result in results)
     total_bytes = sum(result.downloaded_bytes for result in results)
 
     if total_time <= 0:

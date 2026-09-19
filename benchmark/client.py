@@ -133,12 +133,14 @@ def run_benchmark(
     request_count: int = DEFAULT_REQUEST_COUNT,
     connect_timeout_seconds: float = DEFAULT_CONNECT_TIMEOUT_SECONDS,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    on_request_start: Callable[[int], None] | None = None,
     on_result: Callable[[int, RequestResult], None] | None = None,
 ) -> BenchmarkSummary:
     """Run exactly ``request_count`` downloads sequentially.
 
-    ``on_result`` is called only after one full response has been consumed and
-    validated. It is intended for progress output and cannot overlap requests.
+    ``on_request_start`` runs immediately before one GET starts. ``on_result``
+    runs only after the corresponding response is fully consumed and validated.
+    They are intended for presentation only and cannot overlap requests.
     """
 
     if request_count <= 0:
@@ -151,6 +153,8 @@ def run_benchmark(
         timeout_seconds=timeout_seconds,
     ) as client:
         for request_number in range(1, request_count + 1):
+            if on_request_start is not None:
+                on_request_start(request_number)
             result = client.download()
             results.append(result)
             if on_result is not None:

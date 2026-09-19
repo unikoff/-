@@ -101,6 +101,23 @@ def test_benchmark_performs_ten_complete_downloads_sequentially(
     assert BenchmarkHandler.max_active_requests == 1
 
 
+def test_presentation_callbacks_follow_each_complete_request(
+    http_server: tuple[ThreadingHTTPServer, str],
+) -> None:
+    _, base_url = http_server
+    started: list[int] = []
+    completed: list[int] = []
+
+    run_benchmark(
+        base_url + "/file",
+        on_request_start=started.append,
+        on_result=lambda request_number, result: completed.append(request_number),
+    )
+
+    assert started == list(range(1, 11))
+    assert completed == list(range(1, 11))
+
+
 def test_http_error_stops_the_run_without_retry(
     http_server: tuple[ThreadingHTTPServer, str],
 ) -> None:
